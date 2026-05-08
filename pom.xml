@@ -81,7 +81,7 @@
                 <version>2.5.1</version>
                 <configuration>
                     <classifier>deploy</classifier>
-                    <mainClass>com.btc_store.RabbitApplication</mainClass>
+                    <mainClass>com.btc_store.RabbitMQApplication</mainClass>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>
