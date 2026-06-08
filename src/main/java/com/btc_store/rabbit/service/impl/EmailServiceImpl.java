@@ -74,39 +74,60 @@ public class EmailServiceImpl implements EmailService {
             throw new RuntimeException("mail.smtp.ip parametresi tanımlı değil!");
         }
         
+        int port = smtpPort != null ? Integer.parseInt(smtpPort) : 587;
+        boolean isAnonymousRelay = (port == 25);
+
+        log.info("SMTP bağlantı parametreleri -> host: {}, port: {}, username: {}, from: {}, auth: {}, starttls: {}, anonymousRelay: {}",
+                smtpIp, port, smtpUsername, smtpFrom, smtpAuth, smtpStartTls, isAnonymousRelay);
+
         // Dynamic JavaMailSender oluştur
         JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
         mailSender.setHost(smtpIp);
-        mailSender.setPort(smtpPort != null ? Integer.parseInt(smtpPort) : 587);
-        
-        if (smtpUsername != null && !smtpUsername.isEmpty()) {
-            mailSender.setUsername(smtpUsername);
-        }
-        
-        if (smtpPassword != null && !smtpPassword.isEmpty()) {
-            mailSender.setPassword(smtpPassword);
-        }
-        
+        mailSender.setPort(port);
+
+        String fromAddress = smtpFrom != null && !smtpFrom.isEmpty() ? smtpFrom : smtpUsername;
+
         Properties props = mailSender.getJavaMailProperties();
-        props.put("mail.smtp.auth", smtpAuth != null ? smtpAuth : "true");
-        props.put("mail.smtp.starttls.enable", smtpStartTls != null ? smtpStartTls : "true");
-        
+        props.put("mail.transport.protocol", "smtp");
+        props.put("mail.smtp.connectiontimeout", "10000");
+        props.put("mail.smtp.timeout", "10000");
+        props.put("mail.smtp.writetimeout", "10000");
+
+        if (isAnonymousRelay) {
+            // Port 25: anonymous relay, auth yok
+            props.put("mail.smtp.auth", "false");
+            props.put("mail.smtp.starttls.enable", "false");
+            props.put("mail.smtp.starttls.required", "false");
+            log.info("Port 25 anonymous relay modu, kimlik doğrulama atlanıyor");
+        } else {
+            // Port 587 vb: kimlik doğrulama ile gönder
+            if (smtpUsername != null && !smtpUsername.isEmpty()) {
+                mailSender.setUsername(smtpUsername);
+            }
+            if (smtpPassword != null && !smtpPassword.isEmpty()) {
+                mailSender.setPassword(smtpPassword);
+            }
+            props.put("mail.smtp.auth", smtpAuth != null ? smtpAuth : "true");
+            props.put("mail.smtp.starttls.enable", smtpStartTls != null ? smtpStartTls : "true");
+            props.put("mail.smtp.starttls.required", smtpStartTls != null ? smtpStartTls : "true");
+            props.put("mail.smtp.ssl.trust", smtpIp);
+            props.put("mail.smtp.auth.mechanisms", "LOGIN PLAIN");
+            props.put("mail.smtp.auth.ntlm.disable", "true");
+        }
+
         // Mail gönder
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-        
-        String fromEmail = smtpFrom != null && !smtpFrom.isEmpty() ? smtpFrom : smtpUsername;
-        if (fromEmail != null && !fromEmail.isEmpty()) {
-            helper.setFrom(fromEmail);
+
+        if (fromAddress != null && !fromAddress.isEmpty()) {
+            helper.setFrom(fromAddress);
         }
-        
         helper.setTo(emailRequest.getTo());
         helper.setSubject(emailRequest.getSubject());
-        helper.setText(emailRequest.getBody(), true); // HTML olarak gönder
-        
+        helper.setText(emailRequest.getBody(), true);
+
         mailSender.send(message);
-        
-        log.info("Email gönderildi: {} -> {}", fromEmail, emailRequest.getTo());
+        log.info("Email gönderildi: {} -> {}", fromAddress, emailRequest.getTo());
     }
 }
 
